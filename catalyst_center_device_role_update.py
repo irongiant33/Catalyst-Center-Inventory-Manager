@@ -1,13 +1,19 @@
+# 3rd party imports
+import requests # https://docs.python-requests.org/en/latest/index.html
+
+# standard library imports
 import os
 import sys
 import signal
-import requests
 import base64
 import json
 import re
 import cmd
 
 class Device:
+    """
+    Class representing a device in the Catalyst Center inventory.
+    """
     def __init__(self, device_dict):
         self.data = device_dict
         self.hostname = device_dict.get("hostname", "Unknown")
@@ -64,6 +70,17 @@ def string_to_bool(s: str) -> bool:
         return bool_map[cleaned_s]
 
 def get_auth_token(base_url, username, password, bypass_ssl):
+    """
+    Issues a POST request to Catalyst Center to obtain an access token which remains valid for
+    1 hour. The token obtained is required to be set as value to the X-Auth-Token HTTP header
+    for all following API calls to Catalyst Center.
+    Relevant API: https://developer.cisco.com/docs/dna-center/2-3-7-9/authentication-api/
+    
+    :param base_url: Catalyst Center URL
+    :param username: login information
+    :param password: user's password
+    :param bypass_ssl: true/false flag to automatically bypass SSL (true) or prompt for user input (false)
+    """
     auth_str = f"{username}:{password}"
     b64_auth_str = base64.b64encode(auth_str.encode("ascii")).decode()
     headers = {
@@ -88,7 +105,15 @@ def get_auth_token(base_url, username, password, bypass_ssl):
     token = response.json().get("Token")
     return token
 
-def get_device_inventory(base_url, token, bypass_ssl):
+def get_device_inventory(base_url: str, token: str, bypass_ssl: bool):
+    """
+    Issues a GET request to Catalyst Center to retrieve a list of devices and their attributes
+    Relevant API: https://developer.cisco.com/docs/dna-center/2-3-7-9/retrieve-network-devices/
+    
+    :param base_url: Catalyst Center URL
+    :param token: Authentication Token retrieved from the get_auth_token function
+    :param bypass_ssl: True/False flag to bypass SSL automatically (true) or prompt the user for action (false) 
+    """
     url = f"{base_url}/dna/intent/api/v1/network-device"
     headers = {
         "X-Auth-Token": token,
@@ -217,11 +242,13 @@ class DeviceSelector(cmd.Cmd):
         {
             "id": "<device id>",
             "role": "<new role>",
-            "roleSource": "string"
+            "roleSource": "MANUAL"
         }
         Handles SSL certificate verification errors by prompting user to bypass.
+        Relevant API: https://developer.cisco.com/docs/dna-center/2-3-7-9/update-device-role/
+        
         Usage:
-          updateattr
+          updaterole
         """
         if not self.selected_devices:
             print("No devices selected. Use 'select' command first.")

@@ -40,3 +40,12 @@ export CATALYST_CENTER_SSL_BYPASS="false"
 - Tested on Catalyst Center 2.3.7.9.70301.10
 - Tested with API 2-3-7-9
 - This code is in protoype/development stages and should be used with caution in production environments. Please raise an issue in this repository to get in touch with the developer if you have any questions or known issues
+
+## To-do
+
+- [ ] Clean up comments, reference APIs in the script
+- [ ] clean up the help functionality. Command library supports help features for each function
+- [ ] Add functionality testing, work toward full coverage
+- [ ] Add pip-audit or safety to your GitHub Actions pipeline to check dependency security
+- [ ] pylint
+- [ ] static and dynamic security testing, ZAP, semgrep, veracode
