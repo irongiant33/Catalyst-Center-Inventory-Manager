@@ -49,3 +49,7 @@ export CATALYST_CENTER_SSL_BYPASS="false"
 - [ ] Add pip-audit or safety to your GitHub Actions pipeline to check dependency security
 - [ ] pylint
 - [ ] static and dynamic security testing, ZAP, semgrep, veracode
+- [ ] add video walkthrough
+- [ ] List filter for tons of devices giving user the option to not flood their terminal with prints
+- [ ] avoiding need to manually type out device role
+- [ ]  filter devices by role (or other attribute) when listing
