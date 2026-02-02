@@ -25,7 +25,19 @@ Built with Python using only standard libraries + `requests`.
 * Python 3.6+
 * `requests` library (`pip install requests`)
 
-## Environment Variables (required)
+## Installation
+
+```
+git clone https://github.com/irongiant33/Catalyst-Center-Inventory-Manager.git
+cd Catalyst-Center-Inventory-Manager
+python3 -m venv venv
+source venv/bin/activate
+pip3 install -r requirements.txt
+```
+
+## Environment Variables (required) & Running the Program
+
+From the Catalyst-Center-Inventory-Manager directory:
 
 ```bash
 export CATALYST_CENTER_URL="https://your-catalyst-center.example.com"
@@ -33,6 +45,7 @@ export CATALYST_CENTER_USER="admin"
 export CATALYST_CENTER_PASSWORD="your-secure-password"
 # Optional – set to "true"/"yes"/"1" to skip SSL verification from the start
 export CATALYST_CENTER_SSL_BYPASS="false"
+python3 catalyst_center_device_role_update.py
 ```
 
 ## Developer Notes
