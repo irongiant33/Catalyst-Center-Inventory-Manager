@@ -159,89 +159,152 @@ class DeviceSelector(cmd.Cmd):
     def do_list(self, arg):
         """
         List devices with their indices and hostnames.
-        If inventory size > INV_LIMIT, prompts for confirmation before showing all.
-        Optional regex argument filters devices while preserving original indices.
-        
+        If result count > INV_LIMIT, prompts for confirmation before showing all.
+        Supports filtering modes (can be combined):
+          - list                          → show all devices
+          - list regex:<pattern>          → filter by hostname regex (last one wins if multiple)
+          - list attr:<key>=<value>       → filter by exact attribute match
+          - Multiple attr:... are AND-ed together
+          - regex + attr filters are also AND-ed
+
         Examples:
-        list
-        list regex:^SW.*01$
-        list regex:core.*
+          list
+          list regex:^SW.*01$
+          list regex:core.* regex:^PE-     # only the last regex (^PE-) is used
+          list attr:role=ACCESS
+          list attr:family=Catalyst attr:role=ACCESS attr:platformId=C9300
+          list regex:^PE- attr:role=BORDER attr:family=Switches
+          list regex:.*SW.* attr:family=Catalyst attr:role=ACCESS
         """
         arg = arg.strip()
-        use_regex = False
-        pattern = None
+        parts = arg.split()
 
-        if arg.startswith("regex:"):
-            use_regex = True
-            pattern_str = arg[len("regex:"):].strip()
-            try:
-                pattern = re.compile(pattern_str)
-            except re.error as e:
-                print(f"Invalid regex pattern: {e}")
-                return
+        regex_pattern = None           # last one wins
+        attr_filters = {}              # key → required value (multiple = AND)
 
-        # Determine which devices to display
-        if use_regex:
-            matching_devices = []
-            for idx, device in enumerate(self.devices, 1):
-                if pattern.search(device.hostname):
-                    matching_devices.append((idx, device))
-            
-            if not matching_devices:
-                print("No devices match the regex pattern.")
-                return
-            
-            # Show matching devices with original indices
-            print("Matching devices (showing original indices):")
-            for orig_idx, device in matching_devices:
-                print(f"{orig_idx}: {device.hostname}")
-            print(f"Total matching: {len(matching_devices)}")
-        else:
-            # No filter — full list with limit check
-            total_devices = len(self.devices)
-            
-            if total_devices > INV_LIMIT:
-                print(f"Warning: There are {total_devices} devices in inventory "
-                    f"(limit is {INV_LIMIT}).")
-                confirm = input("Display all devices? (yes/no): ").strip().lower()
-                if confirm not in ('y', 'yes', '1', 'true'):
-                    print("List command aborted.")
+        # Parse all arguments — last regex wins, attrs accumulate
+        for part in parts:
+            part = part.strip()
+            if part.startswith("regex:"):
+                pattern_str = part[len("regex:"):].strip()
+                try:
+                    regex_pattern = re.compile(pattern_str)
+                except re.error as e:
+                    print(f"Invalid regex pattern: {e}")
                     return
-            
-            # Display either the full list or nothing if aborted
-            print("Device Inventory:")
-            for idx, device in enumerate(self.devices, 1):
-                print(f"{idx}: {device.hostname}")
-            print(f"Total devices: {total_devices}")
+            elif part.startswith("attr:"):
+                attr_part = part[len("attr:"):].strip()
+                if "=" not in attr_part:
+                    print("Invalid attribute filter format. Use: attr:key=value")
+                    return
+                key, value = attr_part.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                attr_filters[key] = value
+
+        use_regex = regex_pattern is not None
+        use_attr = bool(attr_filters)
+
+        # Collect matching devices
+        matching_devices = []
+        for idx, device in enumerate(self.devices, 1):
+            match = True
+
+            # Apply regex (only the last one, if any)
+            if use_regex:
+                if not regex_pattern.search(device.hostname):
+                    match = False
+
+            # Apply all attribute filters (must match EVERY one)
+            if use_attr and match:
+                for key, required_value in attr_filters.items():
+                    actual_value = device.data.get(key)
+                    if actual_value is None or str(actual_value) != required_value:
+                        match = False
+                        break
+
+            if match:
+                matching_devices.append((idx, device))
+
+        if not matching_devices:
+            if use_regex and use_attr:
+                attr_str = " AND ".join(f"{k}={v}" for k, v in attr_filters.items())
+                print(f"No devices match regex pattern AND attributes: {attr_str}")
+            elif use_regex:
+                print("No devices match the regex pattern.")
+            elif use_attr:
+                attr_str = " AND ".join(f"{k}={v}" for k, v in attr_filters.items())
+                print(f"No devices match attributes: {attr_str}")
+            else:
+                print("No devices found.")
+            return
+
+        # Apply display limit check
+        display_count = len(matching_devices)
+        if display_count > INV_LIMIT:
+            if use_regex and use_attr:
+                attr_str = " AND ".join(f"{k}={v}" for k, v in attr_filters.items())
+                msg = f"Warning: {display_count} devices match regex + {attr_str} "
+            elif use_regex:
+                msg = f"Warning: {display_count} devices match the regex pattern "
+            elif use_attr:
+                attr_str = " AND ".join(f"{k}={v}" for k, v in attr_filters.items())
+                msg = f"Warning: {display_count} devices match {attr_str} "
+            else:
+                msg = f"Warning: {display_count} devices in inventory "
+
+            msg += f"(limit is {INV_LIMIT})."
+            print(msg)
+
+            confirm = input("Display all devices? (yes/no): ").strip().lower()
+            if confirm not in ('y', 'yes', '1', 'true'):
+                print("List command aborted.")
+                return
+
+        # Display header
+        header_parts = []
+        if use_regex:
+            header_parts.append(f"regex:{regex_pattern.pattern}")
+        if use_attr:
+            attr_str = " AND ".join(f"{k}={v}" for k, v in attr_filters.items())
+            header_parts.append(f"attributes: {attr_str}")
+
+        if header_parts:
+            print(f"Matching devices ({' + '.join(header_parts)}, original indices):")
+        else:
+            print("Device Inventory (original indices):")
+
+        for orig_idx, device in matching_devices:
+            print(f"{orig_idx}: {device.hostname}")
+
+        print(f"Total matching: {len(matching_devices)}")
 
     def do_select(self, arg):
         """
-        Select devices by indices, ranges, or regex patterns.
-        Examples:
-          select 3
-          select 2-5
-          select 1,4,7
-          select 1-3,5,7-9
-          select regex:^SW.*01$
+        Select devices by indices, ranges, regex, and/or attribute filters.
+        Supports the same filtering syntax as the 'list' command:
+          - select 3
+          - select 2-5
+          - select 1,4,7
+          - select 1-3,5,7-9
+          - select regex:^SW.*01$
+          - select regex:core.*
+          - select attr:role=ACCESS
+          - select attr:family=Catalyst attr:role=ACCESS attr:platformId=C9300
+          - select regex:^PE- attr:role=BORDER attr:family=Switches
+          - select regex:.*SW.* attr:family=Catalyst attr:role=ACCESS
+
+        Multiple 'regex:' arguments → only the last one is used.
+        Multiple 'attr:key=value' → all must match (logical AND).
         """
         arg = arg.strip()
         if not arg:
-            print("Please specify device indices, ranges, or regex pattern.")
+            print("Please specify device indices, ranges, regex, and/or attribute filters.")
             return
 
-        selected = set()
-
-        if arg.startswith("regex:"):
-            pattern = arg[len("regex:"):].strip()
-            try:
-                regex = re.compile(pattern)
-            except re.error as e:
-                print(f"Invalid regex pattern: {e}")
-                return
-            for device in self.devices:
-                if regex.search(device.hostname):
-                    selected.add(device)
-        else:
+        # First, check if this is an index/range selection (no regex/attr keywords)
+        if not any(p.startswith(("regex:", "attr:")) for p in arg.split()):
+            selected = set()
             parts = arg.split(",")
             for part in parts:
                 part = part.strip()
@@ -266,13 +329,91 @@ class DeviceSelector(cmd.Cmd):
                         selected.add(self.devices[idx - 1])
                     except ValueError:
                         print(f"Invalid index: {part}")
+            if not selected:
+                print("No valid devices selected.")
+                return
+            self.selected_devices = selected
+            print(f"Selected {len(self.selected_devices)} device(s). Use 'show' or 'showattr' to view details.")
+            return
+
+        # --- Filter mode (regex and/or attr) ---
+        parts = arg.split()
+
+        regex_pattern = None           # last one wins
+        attr_filters = {}              # key → required value (multiple = AND)
+
+        for part in parts:
+            part = part.strip()
+            if part.startswith("regex:"):
+                pattern_str = part[len("regex:"):].strip()
+                try:
+                    regex_pattern = re.compile(pattern_str)
+                except re.error as e:
+                    print(f"Invalid regex pattern: {e}")
+                    return
+            elif part.startswith("attr:"):
+                attr_part = part[len("attr:"):].strip()
+                if "=" not in attr_part:
+                    print("Invalid attribute filter format. Use: attr:key=value")
+                    return
+                key, value = attr_part.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                attr_filters[key] = value
+
+        use_regex = regex_pattern is not None
+        use_attr = bool(attr_filters)
+
+        if not (use_regex or use_attr):
+            print("No valid filter provided.")
+            return
+
+        # Collect matching devices
+        selected = set()
+        for device in self.devices:
+            match = True
+
+            # Apply regex (only the last one, if present)
+            if use_regex:
+                if not regex_pattern.search(device.hostname):
+                    match = False
+
+            # Apply all attribute filters (must match EVERY one)
+            if use_attr and match:
+                for key, required_value in attr_filters.items():
+                    actual_value = device.data.get(key)
+                    if actual_value is None or str(actual_value) != required_value:
+                        match = False
+                        break
+
+            if match:
+                selected.add(device)
 
         if not selected:
-            print("No devices matched your selection.")
+            if use_regex and use_attr:
+                attr_str = " AND ".join(f"{k}={v}" for k, v in attr_filters.items())
+                print(f"No devices match regex pattern AND attributes: {attr_str}")
+            elif use_regex:
+                print("No devices match the regex pattern.")
+            elif use_attr:
+                attr_str = " AND ".join(f"{k}={v}" for k, v in attr_filters.items())
+                print(f"No devices match attributes: {attr_str}")
             return
 
         self.selected_devices = selected
-        print(f"Selected {len(self.selected_devices)} device(s). Use 'show' to display details.")
+        count = len(self.selected_devices)
+
+        # Build feedback message
+        filter_desc = []
+        if use_regex:
+            filter_desc.append(f"regex:{regex_pattern.pattern}")
+        if use_attr:
+            attr_str = " AND ".join(f"{k}={v}" for k, v in attr_filters.items())
+            filter_desc.append(f"attributes: {attr_str}")
+
+        desc = " + ".join(filter_desc) if filter_desc else "no filter"
+        print(f"Selected {count} device(s) matching {desc}.")
+        print("Use 'show' or 'showattr' to view details, or 'updaterole' to modify roles.")
 
     def do_showattr(self, arg):
         """
@@ -423,6 +564,9 @@ Commands:
                       list
                       list regex:^SW.*01$
                       list regex:core.*
+                      list attr:role=ACCESS
+                      list attr:platformId=C9300-24T
+                      list regex:^PE- attr:role=BORDER attr:family=Switches 
   select <args>   - Select devices by indices, ranges, or regex.
                     Examples:
                       select 3

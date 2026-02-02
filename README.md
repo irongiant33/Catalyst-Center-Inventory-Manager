@@ -41,6 +41,11 @@ export CATALYST_CENTER_SSL_BYPASS="false"
 - Tested with API 2-3-7-9
 - This code is in protoype/development stages and should be used with caution in production environments. Please raise an issue in this repository to get in touch with the developer if you have any questions or known issues
 
+## Release Notes
+
+- Code cleanup; consolidated environment variable names into global variables
+- List filter for tons of devices giving user the option to not flood their terminal with prints. Added options for providing regex and device attribute filters.
+
 ## To-do
 
 - [ ] Clean up comments, reference APIs in the script
@@ -49,8 +54,7 @@ export CATALYST_CENTER_SSL_BYPASS="false"
 - [ ] Add pip-audit or safety to your GitHub Actions pipeline to check dependency security
 - [ ] pylint
 - [ ] static and dynamic security testing, ZAP, semgrep, veracode
-- [ ] add video walkthrough
-- [ ] List filter for tons of devices giving user the option to not flood their terminal with prints
+- [ ] add video walkthrough & install guide to readme
 - [ ] avoiding need to manually type out device role
-- [ ]  filter devices by role (or other attribute) when listing
+- [ ] regarding selection and listing filters, consider providing OR logic as well as AND logic.
 - [ ] what happens when the user doesn't exist, doesn't enter right password, doesn't have permissions to access inventory, etc. 
