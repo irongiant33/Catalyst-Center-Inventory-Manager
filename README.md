@@ -53,3 +53,4 @@ export CATALYST_CENTER_SSL_BYPASS="false"
 - [ ] List filter for tons of devices giving user the option to not flood their terminal with prints
 - [ ] avoiding need to manually type out device role
 - [ ]  filter devices by role (or other attribute) when listing
+- [ ] what happens when the user doesn't exist, doesn't enter right password, doesn't have permissions to access inventory, etc. 

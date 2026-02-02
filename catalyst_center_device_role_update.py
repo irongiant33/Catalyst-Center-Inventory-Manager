@@ -10,6 +10,13 @@ import json
 import re
 import cmd
 
+# global variables
+CATALYST_CENTER_URL_ENV = "CATALYST_CENTER_URL"
+USERNAME_ENV = "CATALYST_CENTER_USER"
+PASSWORD_ENV = "CATALYST_CENTER_PASSWORD"
+BYPASS_SSL_ENV = "CATALYST_CENTER_SSL_BYPASS"
+INV_LIMIT = 15
+
 class Device:
     """
     Class representing a device in the Catalyst Center inventory.
@@ -150,9 +157,62 @@ class DeviceSelector(cmd.Cmd):
         self.bypass_ssl = bypass_ssl
 
     def do_list(self, arg):
-        "List all devices with their indices and hostnames."
-        for idx, device in enumerate(self.devices, 1):
-            print(f"{idx}: {device.hostname}")
+        """
+        List devices with their indices and hostnames.
+        If inventory size > INV_LIMIT, prompts for confirmation before showing all.
+        Optional regex argument filters devices while preserving original indices.
+        
+        Examples:
+        list
+        list regex:^SW.*01$
+        list regex:core.*
+        """
+        arg = arg.strip()
+        use_regex = False
+        pattern = None
+
+        if arg.startswith("regex:"):
+            use_regex = True
+            pattern_str = arg[len("regex:"):].strip()
+            try:
+                pattern = re.compile(pattern_str)
+            except re.error as e:
+                print(f"Invalid regex pattern: {e}")
+                return
+
+        # Determine which devices to display
+        if use_regex:
+            matching_devices = []
+            for idx, device in enumerate(self.devices, 1):
+                if pattern.search(device.hostname):
+                    matching_devices.append((idx, device))
+            
+            if not matching_devices:
+                print("No devices match the regex pattern.")
+                return
+            
+            # Show matching devices with original indices
+            print("Matching devices (showing original indices):")
+            for orig_idx, device in matching_devices:
+                print(f"{orig_idx}: {device.hostname}")
+            print(f"Total matching: {len(matching_devices)}")
+        else:
+            # No filter — full list with limit check
+            total_devices = len(self.devices)
+            
+            if total_devices > INV_LIMIT:
+                print(f"Warning: There are {total_devices} devices in inventory "
+                    f"(limit is {INV_LIMIT}).")
+                confirm = input("Display all devices? (yes/no): ").strip().lower()
+                if confirm not in ('y', 'yes', '1', 'true'):
+                    print("List command aborted.")
+                    return
+            
+            # Display either the full list or nothing if aborted
+            print("Device Inventory:")
+            for idx, device in enumerate(self.devices, 1):
+                print(f"{idx}: {device.hostname}")
+            print(f"Total devices: {total_devices}")
 
     def do_select(self, arg):
         """
@@ -259,10 +319,10 @@ class DeviceSelector(cmd.Cmd):
             print("Role cannot be empty.")
             return
 
-        username = os.getenv("CATALYST_CENTER_USERNAME")
-        password = os.getenv("CATALYST_CENTER_PASSWORD")
+        username = os.getenv(f"{USERNAME_ENV}")
+        password = os.getenv(f"{PASSWORD_ENV}")
         if not username or not password:
-            print("Environment variables CATALYST_CENTER_USERNAME and CATALYST_CENTER_PASSWORD must be set.")
+            print(f"Environment variables {USERNAME_ENV} and {PASSWORD_ENV} must be set.")
             return
 
         url_base = f"{self.catalyst_center_url}/dna/intent/api/v1/network-device/brief"
@@ -358,7 +418,11 @@ class DeviceSelector(cmd.Cmd):
         print(self.__doc__)
         print("""
 Commands:
-  list            - List all devices with indices and hostnames.
+  list <args>     - List all devices with indices and hostnames.
+                    Examples:
+                      list
+                      list regex:^SW.*01$
+                      list regex:core.*
   select <args>   - Select devices by indices, ranges, or regex.
                     Examples:
                       select 3
@@ -375,15 +439,19 @@ Commands:
 """)
 
 def main():
-    catalyst_center_url = os.getenv("CATALYST_CENTER_URL")
-    username = os.getenv("CATALYST_CENTER_USER")
-    password = os.getenv("CATALYST_CENTER_PASSWORD")
-    bypass_ssl_str = os.getenv("CATALYST_CENTER_SSL_BYPASS")
+    catalyst_center_url = os.getenv(CATALYST_CENTER_URL_ENV)
+    username = os.getenv(USERNAME_ENV)
+    password = os.getenv(PASSWORD_ENV)
+    bypass_ssl_str = os.getenv(BYPASS_SSL_ENV)
     bypass_ssl = string_to_bool(bypass_ssl_str)
     signal.signal(signal.SIGINT, signal_handler)
 
     if not all([catalyst_center_url, username, password]):
-        raise EnvironmentError("Please set CATALYST_CENTER_URL, CATALYST_CENTER_USER, and CATALYST_CENTER_PASSWORD environment variables.")
+        print(f"Please set {CATALYST_CENTER_URL_ENV}, {USERNAME_ENV}, and {PASSWORD_ENV} environment variables.")
+        print(f"{CATALYST_CENTER_URL_ENV}={'set' if catalyst_center_url is not None else 'unset'}")
+        print(f"{USERNAME_ENV}={'set' if username is not None else 'unset'}")
+        print(f"{PASSWORD_ENV}={'set' if password is not None else 'unset'}")
+        exit(1)
 
     token = get_auth_token(catalyst_center_url, username, password, bypass_ssl)
     inventory = get_device_inventory(catalyst_center_url, token, bypass_ssl)
@@ -392,9 +460,12 @@ def main():
         print("No devices found in inventory.")
         return
 
-    print("Device Inventory Hostnames:")
-    for idx, device in enumerate(inventory, 1):
-        print(f"{idx}: {device.hostname}")
+    if(len(inventory) < INV_LIMIT):
+        print("Device Inventory Hostnames:")
+        for idx, device in enumerate(inventory, 1):
+            print(f"{idx}: {device.hostname}")
+    else:
+        print(f"Inventory size greater than {INV_LIMIT}, please use `list` command to show all devices")
 
     selector = DeviceSelector(inventory, catalyst_center_url, token, bypass_ssl)
     selector.cmdloop()
