@@ -41,15 +41,18 @@ export CATALYST_CENTER_SSL_BYPASS="false"
 - Tested with API 2-3-7-9
 - This code is in protoype/development stages and should be used with caution in production environments. Please raise an issue in this repository to get in touch with the developer if you have any questions or known issues
 
-## Release Notes
+## Changelog
 
+V0.1 -> V0.2
 - Code cleanup; consolidated environment variable names into global variables
-- List filter for tons of devices giving user the option to not flood their terminal with prints. Added options for providing regex and device attribute filters.
+- Added functionality to the `list` command; filter for tons of devices giving user the option to not flood their terminal with prints. Added options for providing regex and device attribute filters.
+- Added functionality to the `select` command; filter for tons of devices giving user the option to not flood their terminal with prints. Added options for providing regex and device attribute filters.
+- Added functionality to the `show` command; filter for tons of devices giving user the option to not flood their terminal with prints. Added options for providing regex and device attribute filters. Consolidated the `showattr` command into the `show` command.
+- Cleaned up the help functionality; Command library supports help features for each function as well as a general help
 
 ## To-do
 
 - [ ] Clean up comments, reference APIs in the script
-- [ ] clean up the help functionality. Command library supports help features for each function
 - [ ] Add functionality testing, work toward full coverage
 - [ ] Add pip-audit or safety to your GitHub Actions pipeline to check dependency security
 - [ ] pylint
@@ -58,3 +61,5 @@ export CATALYST_CENTER_SSL_BYPASS="false"
 - [ ] avoiding need to manually type out device role
 - [ ] regarding selection and listing filters, consider providing OR logic as well as AND logic.
 - [ ] what happens when the user doesn't exist, doesn't enter right password, doesn't have permissions to access inventory, etc. 
+- [ ] option to completely filter out any InsecureRequestWarnings
+- [ ] option to provide a string input to the attribute filter that contains spaces
