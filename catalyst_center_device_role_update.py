@@ -146,7 +146,7 @@ def get_device_inventory(base_url: str, token: str, bypass_ssl: bool):
 
 class DeviceSelector(cmd.Cmd):
     intro = "Enter device selection commands. Type 'help' or '?' for instructions."
-    prompt = "(select) "
+    prompt = "(devices) "
 
     def __init__(self, devices, catalyst_center_url, token, bypass_ssl):
         super().__init__()
