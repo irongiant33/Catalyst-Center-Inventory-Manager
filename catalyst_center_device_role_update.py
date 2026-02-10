@@ -235,7 +235,9 @@ class DeviceSelector(cmd.Cmd):
 
     def do_list(self, arg):
         """
-        List devices with their indices and hostnames.
+        List devices with their indices and hostnames. Supports regex for attribute keys
+        and values.
+
         If result count > INV_LIMIT, prompts for confirmation before showing all.
         Supports filtering modes (can be combined):
           - list                          → show all devices
@@ -251,6 +253,7 @@ class DeviceSelector(cmd.Cmd):
           list regex:core.* regex:^PE-     # only the last regex (^PE-) is used
           list attr:role=ACCESS
           list attr:role="BORDER ROUTER"
+          list attr:managementIpAddress=10.95.0   # matches IPs that contain 10.95.0
           list attr:family=Catalyst attr:role=ACCESS attr:platformId=C9300
           list regex:^PE- attr:role=BORDER attr:family=Switches
           list regex:.*SW.* attr:family=Catalyst attr:role=ACCESS
@@ -286,7 +289,9 @@ class DeviceSelector(cmd.Cmd):
 
     def do_select(self, arg):
         """
-        Select devices by indices, ranges, regex, and/or attribute filters.
+        Select devices by indices, ranges, regex, and/or attribute filters. Attribute
+        filters support regex for keys and values.
+
         Supports the same filtering syntax as the 'list' command:
           - select 3
           - select 2-5
@@ -295,6 +300,7 @@ class DeviceSelector(cmd.Cmd):
           - select regex:^SW.*01$
           - select regex:core.*
           - select attr:role=ACCESS
+          - select attr:maangementIpAddress=10.95.5  # selects IPs that contain 10.95.5
           - select attr:role="BORDER ROUTER"
           - select attr:family=Catalyst attr:role=ACCESS attr:platformId=C9300
           - select regex:^PE- attr:role=BORDER attr:family=Switches
@@ -473,6 +479,7 @@ class DeviceSelector(cmd.Cmd):
             → First apply filters to current selection (last regex wins, attrs = AND)
             → Then show basic list, full details, or single attribute values
             → If a value has a space, enclose the entire value in quotes
+            → Supports regex for attribute keys and values for partial matches
 
         Examples:
           show
