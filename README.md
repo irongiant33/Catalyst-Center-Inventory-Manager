@@ -33,6 +33,7 @@ cd Catalyst-Center-Inventory-Manager
 python3 -m venv venv
 source venv/bin/activate
 pip3 install -r requirements.txt
+deactivate
 ```
 
 ## Environment Variables (required) & Running the Program
@@ -45,8 +46,12 @@ export CATALYST_CENTER_USER="admin"
 export CATALYST_CENTER_PASSWORD="your-secure-password"
 # Optional – set to "true"/"yes"/"1" to skip SSL verification from the start
 export CATALYST_CENTER_SSL_BYPASS="false"
+source venv/bin/activate
 python3 catalyst_center_device_role_update.py
+deactivate
 ```
+
+For the `CATALYST_CENTER_URL`, ensure there are no trailing `/` otherwise you may receive a 404 Client Error on startup.
 
 ## Developer Notes
 
@@ -55,6 +60,10 @@ python3 catalyst_center_device_role_update.py
 - This code is in protoype/development stages and should be used with caution in production environments. Please raise an issue in this repository to get in touch with the developer if you have any questions or known issues
 
 ## Changelog
+
+V0.2 -> V0.3
+- Adding install guide to readme
+- Added option to provide a string input to the attribute filter that contains spaces
 
 V0.1 -> V0.2
 - Code cleanup; consolidated environment variable names into global variables
@@ -75,4 +84,4 @@ V0.1 -> V0.2
 - [ ] regarding selection and listing filters, consider providing OR logic as well as AND logic.
 - [ ] what happens when the user doesn't exist, doesn't enter right password, doesn't have permissions to access inventory, etc. 
 - [ ] option to completely filter out any InsecureRequestWarnings
-- [ ] option to provide a string input to the attribute filter that contains spaces
+- [ ] option to provide regex matches when filtering by device attribute

@@ -9,6 +9,7 @@ import base64
 import json
 import re
 import cmd
+import shlex
 
 # global variables
 CATALYST_CENTER_URL_ENV = "CATALYST_CENTER_URL"
@@ -40,6 +41,57 @@ class Device:
 
     def to_json(self):
         return json.dumps(self.data, indent=2)
+    
+def parse_cli_filters(args_str: str):
+    """
+    Parse filter arguments supporting quoted keys/values with spaces.
+    Returns (regex_pattern: re.Pattern | None, attr_filters: dict)
+    """
+    regex_pattern = None
+    attr_filters = {}
+
+    # shlex handles quotes properly
+    try:
+        tokens = shlex.split(args_str)
+    except ValueError as e:
+        print(f"Parsing error (check quotes): {e}")
+        return None, None
+
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+
+        if token.startswith("regex:"):
+            pattern = token[len("regex:"):].strip()
+            if pattern:
+                try:
+                    regex_pattern = re.compile(pattern)
+                except re.error as e:
+                    print(f"Invalid regex: {e}")
+                    return None, None
+        elif token.startswith("attr:"):
+            # attr:key=value  or  attr:"key with space"=value
+            attr_part = token[len("attr:"):].strip()
+
+            # Find the = sign (could be after quoted key)
+            if '=' not in attr_part:
+                print(f"Invalid attr format (missing =): {token}")
+                return None, None
+
+            key_part, value_part = attr_part.split("=", 1)
+            key = key_part.strip()
+            value = value_part.strip()
+
+            # Remove surrounding quotes from value if present
+            if (value.startswith('"') and value.endswith('"')) or \
+               (value.startswith("'") and value.endswith("'")):
+                value = value[1:-1]
+
+            attr_filters[key] = value
+
+        i += 1
+
+    return regex_pattern, attr_filters
 
 def signal_handler(sig, frame):
     """
@@ -163,7 +215,8 @@ class DeviceSelector(cmd.Cmd):
         Supports filtering modes (can be combined):
           - list                          → show all devices
           - list regex:<pattern>          → filter by hostname regex (last one wins if multiple)
-          - list attr:<key>=<value>       → filter by exact attribute match
+          - list attr:<key>=<value>       → filter by exact attribute match. Enclose values in 
+                                            quotes if they contain a space.
           - Multiple attr:... are AND-ed together
           - regex + attr filters are also AND-ed
 
@@ -172,35 +225,16 @@ class DeviceSelector(cmd.Cmd):
           list regex:^SW.*01$
           list regex:core.* regex:^PE-     # only the last regex (^PE-) is used
           list attr:role=ACCESS
+          list attr:role="BORDER ROUTER"
           list attr:family=Catalyst attr:role=ACCESS attr:platformId=C9300
           list regex:^PE- attr:role=BORDER attr:family=Switches
           list regex:.*SW.* attr:family=Catalyst attr:role=ACCESS
         """
         arg = arg.strip()
-        parts = arg.split()
+        regex_pattern, attr_filters = parse_cli_filters(arg)
 
-        regex_pattern = None           # last one wins
-        attr_filters = {}              # key → required value (multiple = AND)
-
-        # Parse all arguments — last regex wins, attrs accumulate
-        for part in parts:
-            part = part.strip()
-            if part.startswith("regex:"):
-                pattern_str = part[len("regex:"):].strip()
-                try:
-                    regex_pattern = re.compile(pattern_str)
-                except re.error as e:
-                    print(f"Invalid regex pattern: {e}")
-                    return
-            elif part.startswith("attr:"):
-                attr_part = part[len("attr:"):].strip()
-                if "=" not in attr_part:
-                    print("Invalid attribute filter format. Use: attr:key=value")
-                    return
-                key, value = attr_part.split("=", 1)
-                key = key.strip()
-                value = value.strip()
-                attr_filters[key] = value
+        if regex_pattern is None and attr_filters is None:
+            return
 
         use_regex = regex_pattern is not None
         use_attr = bool(attr_filters)
@@ -290,12 +324,14 @@ class DeviceSelector(cmd.Cmd):
           - select regex:^SW.*01$
           - select regex:core.*
           - select attr:role=ACCESS
+          - select attr:role="BORDER ROUTER"
           - select attr:family=Catalyst attr:role=ACCESS attr:platformId=C9300
           - select regex:^PE- attr:role=BORDER attr:family=Switches
           - select regex:.*SW.* attr:family=Catalyst attr:role=ACCESS
 
         Multiple 'regex:' arguments → only the last one is used.
-        Multiple 'attr:key=value' → all must match (logical AND).
+        Multiple 'attr:key=value' → all must match (logical AND). Enclose values in quotes
+                                    if they contain spaces.
         """
         arg = arg.strip()
         if not arg:
@@ -337,29 +373,10 @@ class DeviceSelector(cmd.Cmd):
             return
 
         # --- Filter mode (regex and/or attr) ---
-        parts = arg.split()
+        regex_pattern, attr_filters = parse_cli_filters(arg)
 
-        regex_pattern = None           # last one wins
-        attr_filters = {}              # key → required value (multiple = AND)
-
-        for part in parts:
-            part = part.strip()
-            if part.startswith("regex:"):
-                pattern_str = part[len("regex:"):].strip()
-                try:
-                    regex_pattern = re.compile(pattern_str)
-                except re.error as e:
-                    print(f"Invalid regex pattern: {e}")
-                    return
-            elif part.startswith("attr:"):
-                attr_part = part[len("attr:"):].strip()
-                if "=" not in attr_part:
-                    print("Invalid attribute filter format. Use: attr:key=value")
-                    return
-                key, value = attr_part.split("=", 1)
-                key = key.strip()
-                value = value.strip()
-                attr_filters[key] = value
+        if regex_pattern is None and attr_filters is None:
+            return
 
         use_regex = regex_pattern is not None
         use_attr = bool(attr_filters)
@@ -417,7 +434,9 @@ class DeviceSelector(cmd.Cmd):
     
     def do_updaterole(self, arg):
         """
-        Update the 'role' attribute for the selected devices.
+        Update the 'role' attribute for the selected devices. You will have to enter the
+        role manually as if it were a string, case-sensitive. 
+
         Uses PUT request to /dna/intent/api/v1/network-device/brief with payload:
         {
             "id": "<device id>",
@@ -527,15 +546,17 @@ class DeviceSelector(cmd.Cmd):
         show regex:<pattern> [attr:key=value ...] [detail|attr <attr_name>]
             → First apply filters to current selection (last regex wins, attrs = AND)
             → Then show basic list, full details, or single attribute values
+            → If a value has a space, enclose the entire value in quotes
 
         Examples:
           show
           show detail
           show attr role
-          show attr tag.Branch
+          show attr dnsResolvedManagementAddress
           show regex:^core.* attr role
           show regex:^PE- attr:role=BORDER attr family detail
           show attr role regex:SW.* attr:family=Catalyst
+          show attr:role="BORDER ROUTER"
         """
         arg = arg.strip()
         parts = arg.split() if arg else []
@@ -575,27 +596,11 @@ class DeviceSelector(cmd.Cmd):
             devices_to_show = self.selected_devices
             filter_desc = "currently selected"
         else:
-            # Parse filters (same logic as before)
-            regex_pattern = None
-            attr_filters = {}
+            filter_str = " ".join(filter_parts)
+            regex_pattern, attr_filters = parse_cli_filters(filter_str)
 
-            for part in filter_parts:
-                if part.startswith("regex:"):
-                    pattern_str = part[len("regex:"):].strip()
-                    try:
-                        regex_pattern = re.compile(pattern_str)
-                    except re.error as e:
-                        print(f"Invalid regex pattern: {e}")
-                        return
-                elif part.startswith("attr:"):
-                    attr_part = part[len("attr:"):].strip()
-                    if "=" not in attr_part:
-                        print("Invalid attribute filter format. Use: attr:key=value")
-                        return
-                    key, value = attr_part.split("=", 1)
-                    key = key.strip()
-                    value = value.strip()
-                    attr_filters[key] = value
+            if regex_pattern is None and attr_filters is None:
+                return
 
             use_regex = regex_pattern is not None
             use_attr_filters = bool(attr_filters)
