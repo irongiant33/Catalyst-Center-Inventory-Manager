@@ -90,6 +90,8 @@ V0.1 -> V0.2
 
 ## To-do
 
+- [ ] Instructions for adding environment variables on Windows
+- [ ] creating an environment variable file where users can enter their information to save locally
 - [ ] Clean up comments, reference APIs in the script
 - [ ] Add functionality testing, work toward full coverage
 - [ ] Add pip-audit or safety to your GitHub Actions pipeline to check dependency security
